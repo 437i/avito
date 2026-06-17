@@ -1,10 +1,10 @@
 package di
 
 import (
+	"avito/internal/app"
 	"avito/internal/handler/common"
-	handlerCourier "avito/internal/handler/courier"
-	repoCourier "avito/internal/repository/courier"
-	serviceCourier "avito/internal/service/courier"
+	hc "avito/internal/handler/courier"
+	rc "avito/internal/repository/courier"
 	"context"
 	"errors"
 	"fmt"
@@ -23,14 +23,14 @@ import (
 var Module = fx.Module("courier",
 	fx.Provide(
 		initDBPool, 
-		repoCourier.NewRepository, 
-		serviceCourier.NewService,
-		handlerCourier.NewHandler,
+		rc.NewRepository, 
+		app.NewService,
+		app.NewHandler,
 	),
 	fx.Invoke(startServer),
 )
 
-func startServer(lc fx.Lifecycle, dbPool *pgxpool.Pool, courierHandler *handlerCourier.Handler, port string) {
+func startServer(lc fx.Lifecycle, dbPool *pgxpool.Pool, courierHandler *hc.Handler, port string) {
 	var srv *http.Server
 	serverErr := make(chan error, 1)
 
@@ -107,7 +107,7 @@ func waitGracefulShutdown(srv *http.Server, dbPool *pgxpool.Pool, serverErr <-ch
 	log.Println("DB pool closed")
 }
 
-func getRouter(handler *handlerCourier.Handler) *mux.Router {
+func getRouter(handler *hc.Handler) *mux.Router {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/ping", common.Ping).Methods("GET")
@@ -123,10 +123,11 @@ func getRouter(handler *handlerCourier.Handler) *mux.Router {
 	return r
 }
 
-func initDBPool() *pgxpool.Pool {
+func initDBPool() (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(connString())
 	if err != nil {
-		log.Fatalf("Unable to parse connection string: %v\n", err)
+		log.Printf("Unable to parse connection string: %v\n", err)
+		return nil, err
 	}
 	config.MaxConns = 20                      // Максимальное количество соединений
 	config.MinConns = 5                       // Минимальное количество соединений
@@ -139,7 +140,8 @@ func initDBPool() *pgxpool.Pool {
 
 	dbPool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		log.Fatalf("Unable to create connection pool: %v\n", err)
+		log.Printf("Unable to create connection pool: %v\n", err)
+		return nil, err
 	}
 
 	pingAttemptsLimit := 3
@@ -159,11 +161,12 @@ func initDBPool() *pgxpool.Pool {
 	}
 
 	if pingErr != nil {
-		log.Fatalf("Unable to ping database")
+		log.Println("Unable to ping database")
+		return nil, pingErr
 	}
 
 	log.Println("Database connection pool established")
-	return dbPool
+	return dbPool, nil
 }
 
 func connString() string {

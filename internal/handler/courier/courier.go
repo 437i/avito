@@ -15,8 +15,8 @@ type Handler struct {
 	service service
 }
 
-func NewHandler(srvc service) *Handler {
-	return &Handler{srvc}
+func NewHandler(svc service) *Handler {
+	return &Handler{svc}
 }
 
 func (h *Handler) GetCourier(w http.ResponseWriter, r *http.Request) {
